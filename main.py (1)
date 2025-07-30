@@ -1,0 +1,109 @@
+from flask import Flask from threading import Thread from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
+
+BOT_TOKEN = "2107791918:AAG0HDm30ybqePql_mhonmmJrBTDLGhxwpE" ADMIN_ID = 943771483
+
+Storage for temporary messages
+
+message_store = {}
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE): await update.message.reply_text("𝐖𝐡𝐢𝐭 𝐭𝐡𝐢𝐬 𝐫𝐨𝐛𝐨𝐭 𝐲𝐨𝐮 𝐜𝐚𝐧 𝐭𝐚𝐥𝐤 𝐭𝐨 𝐦𝐞 𝐚𝐧𝐨𝐧𝐲𝐦𝐨𝐮𝐬𝐥𝐲 𝐛𝐢𝐭𝐜𝐡.")
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE): if update.effective_user.id == ADMIN_ID: return  # جلوگیری از برگشت پیام‌های ادمین به خودش if update.effective_user.id in blocked_users: return user = update.effective_user text = update.message.text
+
+# Store message by unique ID
+message_id = str(update.message.message_id)
+message_store[message_id] = {
+    "id": user.id,
+    "username": user.username,
+    "full_name": user.full_name,
+    "text": text
+}
+
+# Send short message with View button to admin
+keyboard = [[
+    InlineKeyboardButton("View", callback_data=f"view_{message_id}"),
+    InlineKeyboardButton("Reply", callback_data=f"reply_{message_id}"),
+    InlineKeyboardButton("Block", callback_data=f"block_{message_id}")
+]]
+reply_markup = InlineKeyboardMarkup(keyboard)
+await context.bot.send_message(chat_id=ADMIN_ID, text="𝐘𝐤𝐢 𝐤𝐨𝐬 𝐠𝐨𝐟", reply_markup=reply_markup)
+
+# Confirm to sender
+await update.message.reply_text("𝐊𝐨𝐬𝐬𝐡𝐞𝐫 𝐬𝐡𝐨𝐦𝐚 𝐬𝐚𝐛𝐭 𝐬𝐡𝐨𝐝")
+
+async def view_callback(update: Update, context: ContextTypes.DEFAULT_TYPE): query = update.callback_query await query.answer() message_id = query.data.replace("view_", "")
+
+if message_id in message_store:
+    data = message_store[message_id]
+    user_info = (
+        f"👤 Name: {data['full_name']}
+
+" f"🆔 ID: {data['id']} " f"🔗 Username: @{data['username'] if data['username'] else 'None'} " f"💬 Message: {data['text']}" ) await query.message.reply_text(user_info) else: await query.message.reply_text("𝐍𝐨 𝐦𝐬𝐠 𝐟𝐨𝐮𝐧𝐝 𝐲𝐨")
+
+async def reply_callback(update: Update, context: ContextTypes.DEFAULT_TYPE): query = update.callback_query await query.answer() message_id = query.data.replace("reply_", "")
+
+if message_id in message_store:
+    data = message_store[message_id]
+    context.user_data['reply_to_id'] = data['id']
+    await query.message.reply_text("𝐉𝐯𝐚𝐛𝐞 𝐤𝐨𝐬𝐬𝐡𝐞𝐫𝐬𝐡𝐨 𝐛𝐝𝐞")
+    await context.bot.send_message(chat_id=data['id'], text="𝐏𝐦𝐭𝐨 𝐤𝐡𝐮𝐧𝐝")
+else:
+    await query.message.reply_text("𝐍𝐨 𝐦𝐬𝐠 𝐟𝐨𝐮𝐧𝐝 𝐲𝐨")
+
+Blocked users list
+
+import json from pathlib import Path
+
+BLOCKLIST_FILE = Path("blocked_users.json") if BLOCKLIST_FILE.exists(): blocked_users = set(json.loads(BLOCKLIST_FILE.read_text())) else: blocked_users = set()
+
+def save_blocklist(): BLOCKLIST_FILE.write_text(json.dumps(list(blocked_users)))
+
+async def block_callback(update: Update, context: ContextTypes.DEFAULT_TYPE): query = update.callback_query await query.answer() message_id = query.data.replace("block_", "")
+
+if message_id in message_store:
+    data = message_store[message_id]
+    blocked_users.add(data['id'])
+    save_blocklist()
+    await query.message.reply_text(f"🚫 User {data['id']} has been blocked.")
+else:
+    await query.message.reply_text("User not found or already blocked.")
+
+async def reply_command(update: Update, context: ContextTypes.DEFAULT_TYPE): if update.effective_user.id != ADMIN_ID: return
+
+if not context.args:
+    await update.message.reply_text("𝐋𝐨𝐥 𝐰𝐫𝐢𝐭𝐞 𝐚 𝐦𝐬𝐠 𝐛𝐫𝐮𝐡")
+    return
+
+try:
+    user_id = context.user_data.get('reply_to_id')
+    if not user_id:
+        await update.message.reply_text("𝐘𝐨𝐮 𝐠𝐨𝐭𝐭𝐚 𝐜𝐥𝐢𝐜𝐤 𝐑𝐞𝐩𝐥𝐲 𝐛𝐫𝐨")
+        return
+
+    message = ' '.join(context.args)
+    await context.bot.send_message(chat_id=user_id, text=message)
+    await update.message.reply_text("𝐉𝐯𝐚𝐛𝐞 𝐤𝐨𝐬𝐬𝐡𝐞𝐫𝐬𝐡 𝐞𝐫𝐬𝐚𝐥 𝐬𝐡𝐝")
+
+except Exception as e:
+    if "bot was blocked by the user" in str(e).lower():
+        await update.message.reply_text("𝐊𝐨𝐬𝐤𝐬𝐡 𝐛𝐥𝐨𝐜𝐤 𝐤𝐫𝐝𝐞")
+    else:
+        await update.message.reply_text(f"❌ Failed to send message:
+
+{e}")
+
+async def unblock_command(update: Update, context: ContextTypes.DEFAULT_TYPE): if update.effective_user.id != ADMIN_ID: return if not context.args: await update.message.reply_text("Please provide a user ID to 𝐮𝐧𝐛𝐥𝐨𝐜𝐤.") return try: user_id = int(context.args[0]) if user_id in blocked_users: blocked_users.remove(user_id) save_blocklist() await update.message.reply_text(f"✅ User {user_id} has been 𝐮𝐧𝐛𝐥𝐨𝐜𝐤ed.") else: await update.message.reply_text("𝐓𝐡𝐚𝐭 𝐮𝐬𝐞𝐫 𝐚𝐢𝐧’𝐭 𝐛𝐥𝐨𝐜𝐤𝐞𝐝 𝐛𝐫𝐮𝐡") except: await update.message.reply_text("𝐒𝐨𝐦𝐞𝐭𝐡𝐢𝐧’𝐬 𝐬𝐮𝐬 𝐰𝐢𝐭𝐡 𝐭𝐡𝐚𝐭 𝐈𝐃")
+
+app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+app.add_handler(CommandHandler("start", start))
+app.add_handler(CommandHandler("reply", reply_command))
+app.add_handler(CommandHandler("𝐮𝐧𝐛𝐥𝐨𝐜𝐤", unblock_command))
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+app.add_handler(CallbackQueryHandler(view_callback, pattern="^view_"))
+app.add_handler(CallbackQueryHandler(reply_callback, pattern="^reply_"))
+app.add_handler(CallbackQueryHandler(block_callback, pattern="^block_"))
+
+print("🤖 Bot is running...")
+app.run_polling()
+
